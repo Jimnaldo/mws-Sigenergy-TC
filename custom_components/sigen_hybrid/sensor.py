@@ -186,7 +186,13 @@ class GeneratorSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         settings = self._generator.get("settings", {})
-        attributes = {"data_source": "sigenergy_cloud_generator", "poll_interval_seconds": 900}
+        observed = (
+            self._generator.get("live", {}).get("retrieved_at")
+            if self.description.key == "power_kw"
+            else self._generator.get("settings_observed_at")
+        )
+        # The card treats cloud readings as fresh for 30 minutes after this clock.
+        attributes = {"data_source": "sigenergy_cloud_generator", "poll_interval_seconds": 900, "observed_at": observed}
         if self.description.key == "time_of_use":
             attributes["periods"] = settings.get("time_of_use", {}).get("periods", [])
         if self.description.key == "operation_mode":
