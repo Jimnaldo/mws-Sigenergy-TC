@@ -39,7 +39,7 @@ export function fitSankeyWidth(svg){
     if(Number(box)===120)node.setAttribute('width',String(120*factor));
   }
 }
-const DEVICE_ROUTES = new Set(['solar','load','battery','battery_module','inverter','gateway','grid','ac','dc','optimizer','strings','devices','forecast','weather','battery_energy','plant','alerts','alert_history','alert_detail','system_about','software_update','warranty','warranty_download','care','sigen_care','diagnosis','diagnosis_history','diagnosis_detail','modbus_server','support_history','service','messages','message_detail']);
+const DEVICE_ROUTES = new Set(['generator','solar','load','battery','battery_module','inverter','gateway','grid','ac','dc','optimizer','strings','devices','forecast','weather','battery_energy','plant','alerts','alert_history','alert_detail','system_about','software_update','warranty','warranty_download','care','sigen_care','diagnosis','diagnosis_history','diagnosis_detail','modbus_server','support_history','service','messages','message_detail']);
 const CHARTS = {
   power:[['solar_power','Solar','#efc900'],['battery_power','Battery','#26c9c8',-1],['grid_power','Grid','#6694ff'],['home_power','Load','#a45bf0',-1],['ac_power','EVAC','#b46767',-1],['dc_power','EVDC','#d29420',-1]],
   solar:[['solar_power','Solar','#efc900']], load:[['home_power','Load','#a45bf0']],

@@ -90,6 +90,18 @@ class OwnerDeviceReads:
             },
         )
 
+    async def generator_settings(self):
+        """Read-only: the owner app's generator settings page."""
+        from .generator import SETTINGS_PATH
+
+        return await self.client._data("GET", SETTINGS_PATH, params={"stationId": self.client._station_id()})
+
+    async def generator_real_time(self):
+        """Read-only: the owner app's generator live values."""
+        from .generator import REAL_TIME_PATH
+
+        return await self.client._data("GET", REAL_TIME_PATH, params={"stationId": self.client._station_id()})
+
     @staticmethod
     def _history_date(value):
         if not isinstance(value, str) or not re.fullmatch(r"[0-9]{8}", value):

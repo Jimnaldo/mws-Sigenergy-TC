@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .errors import AuthenticationError, CapabilityError, CloudLoginFailure, TransportError
+from .generator import generator_live_data, generator_settings_data
 from .owner_devices import (
     battery_inventory,
     battery_module_data,
@@ -140,6 +141,35 @@ class CloudAdapter:
         self._module_inventory_fetched = float("-inf")
         self._module_topology_schema = []
         self._module_read_diagnostics = {}
+        self._generator = {}
+        self._generator_absent_until = float("-inf")
+
+    async def _generator_details(self):
+        """Read-only generator settings and live rows, at the detail cadence.
+
+        Plants without a generator are re-checked daily, not every cycle.
+        """
+        if not hasattr(self.client, "generator_settings") or time.monotonic() < self._generator_absent_until:
+            return dict(self._generator)
+        try:
+            settings = generator_settings_data(await self.client.generator_settings())
+        except Exception as error:
+            self._stop_module_burst(error)
+            self._generator_absent_until = time.monotonic() + 86400
+            self._generator = {}
+            return {}
+        if not settings.get("present"):
+            self._generator_absent_until = time.monotonic() + 86400
+            self._generator = {}
+            return {}
+        result = {"settings": settings, "settings_observed_at": datetime.now(timezone.utc).isoformat()}
+        try:
+            result["live"] = generator_live_data(await self.client.generator_real_time(), datetime.now(timezone.utc))
+        except Exception as error:
+            self._stop_module_burst(error)
+            result["live"] = {"rows": []}
+        self._generator = result
+        return dict(result)
 
     async def _battery_modules(self):
         """Discover identities daily; reuse this session and the 15-minute cache."""
@@ -307,6 +337,7 @@ class CloudAdapter:
                         forecast_available=forecast_available,
                         battery_modules=await self._battery_modules(),
                         module_read_diagnostics=self._module_read_diagnostics,
+                        generator=await self._generator_details(),
                     )
                     self._details_fetched = time.monotonic()
                 self._cache = {

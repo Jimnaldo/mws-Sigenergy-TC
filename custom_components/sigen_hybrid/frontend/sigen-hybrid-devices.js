@@ -5,7 +5,7 @@
  */
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 const MISSING = new Set(['', 'unknown', 'unavailable', 'none']);
-const TYPES = Object.freeze({pv:'solar',pvarray:'solar',solarpanel:'solar',pvpanel:'solar',pvmodule:'solar',optimizer:'solar',solar:'solar',battery:'storage',batterysystem:'storage',batterymodule:'storage',battery_module:'storage',ess:'storage',sigenstor:'storage',sigenstorsystem:'storage',storage:'storage',aio:'storage',inverter:'storage',energycontroller:'storage',controller:'storage',ac:'ac',evac:'ac',accharger:'ac',sigenaccharger:'ac',dc:'dc',evdc:'dc',dccharger:'dc',sigendccharger:'dc',gateway:'gateway',energygateway:'gateway',sigengateway:'gateway',grid:'grid',load:'load',home:'load'});
+const TYPES = Object.freeze({pv:'solar',pvarray:'solar',solarpanel:'solar',pvpanel:'solar',pvmodule:'solar',optimizer:'solar',solar:'solar',battery:'storage',batterysystem:'storage',batterymodule:'storage',battery_module:'storage',ess:'storage',sigenstor:'storage',sigenstorsystem:'storage',storage:'storage',aio:'storage',inverter:'storage',energycontroller:'storage',controller:'storage',ac:'ac',evac:'ac',accharger:'ac',sigenaccharger:'ac',dc:'dc',evdc:'dc',dccharger:'dc',sigendccharger:'dc',gateway:'gateway',energygateway:'gateway',generator:'generator',genset:'generator',sigengateway:'gateway',grid:'grid',load:'load',home:'load'});
 function kind(value) {
   const raw = String(value && typeof value === 'object' ? value.type ?? value.device_type ?? value.deviceType ?? '' : value ?? '').toLowerCase().replace(/[\s_-]/g, '');
   return Object.hasOwn(TYPES,raw) ? TYPES[raw] : '';
@@ -17,6 +17,7 @@ function illustration(type) {
   if (type === 'ac') return '<rect x="31" y="17" width="53" height="100" rx="17" fill="#ccd7de"/><rect x="25" y="12" width="54" height="96" rx="17" fill="#f7fafb" stroke="#90a5b3" stroke-width="1.5"/><circle cx="52" cy="40" r="14" fill="#203b4c"/><circle cx="52" cy="40" r="5" fill="#35d4cb"/><path d="M52 69 V89" stroke="#c6d4de" stroke-width="2"/><path d="M79 61 C111 62 109 124 88 130 C69 135 62 119 65 105" fill="none" stroke="#536876" stroke-width="5" stroke-linecap="round"/><path d="M63 103 L64 89 L73 89 L74 106 Z" fill="#263f4c"/><path d="M39 114 H65" stroke="#a3b4bf" stroke-width="4"/>';
   if (type === 'dc') return '<path d="M35 7 L81 4 L92 13 V143 L80 150 L35 146 Z" fill="#d3dde4" stroke="#92a8b6"/><rect x="28" y="8" width="53" height="136" rx="7" fill="#f7fafb" stroke="#8ca3b2" stroke-width="1.5"/><rect x="38" y="25" width="32" height="25" rx="5" fill="#243e4f"/><circle cx="54" cy="37" r="4" fill="#39d6cc"/><path d="M39 70 H69 M39 76 H69" stroke="#c7d4de" stroke-width="2"/><path d="M81 61 C110 67 109 133 92 135 C74 137 77 110 77 99" fill="none" stroke="#536a79" stroke-width="5" stroke-linecap="round"/><path d="M74 98 V82 H85 V100 Z" fill="#2b4657"/><path d="M22 147 H88 L97 155 H16 Z" fill="#9dafba"/>';
   if (type === 'gateway') return '<rect x="31" y="29" width="61" height="89" rx="7" fill="#d1dce3"/><rect x="23" y="25" width="63" height="86" rx="7" fill="#f6fafb" stroke="#9bb0be" stroke-width="1.5"/><path d="M33 35 H73 M33 40 H73" stroke="#dbe5eb" stroke-width="2"/><circle cx="66" cy="54" r="3.5" fill="#2ecdc6"/><path d="M36 111 V127 M53 111 V131 M70 111 V127" stroke="#9cafba" stroke-width="4" stroke-linecap="round"/>';
+  if (type === 'generator') return '<rect x="14" y="50" width="92" height="66" rx="6" fill="#f6f9fa" stroke="#93a8b6" stroke-width="1.5"/><rect x="22" y="60" width="34" height="24" rx="3" fill="#d5e0e7"/><path d="M64 62 H96 M64 70 H96 M64 78 H96 M64 86 H96" stroke="#c3d1db" stroke-width="3"/><circle cx="39" cy="100" r="6" fill="#2ecdc6"/><path d="M18 116 V126 M102 116 V126" stroke="#8fa3b1" stroke-width="5" stroke-linecap="round"/>';
   if (type === 'grid') return '<path d="M59 10 L27 145 M61 10 L93 145 M23 145 H97 M37 98 H83 M43 69 H77 M47 43 H73 M29 44 H91 M23 71 H97 M15 100 H105 M29 143 L78 70 M91 143 L42 70 M44 68 L73 42 M76 68 L47 42" fill="none" stroke="#809aaa" stroke-width="4" stroke-linejoin="round"/><path d="M29 43 V55 M91 43 V55 M23 71 V84 M97 71 V84 M15 100 V113 M105 100 V113" stroke="#b7c9d4" stroke-width="4"/>';
   if (type === 'load') return '<path d="M17 72 L60 29 L103 72 V142 H17 Z" fill="#e6eff4" stroke="#91a8b8" stroke-width="3"/><path d="M8 75 L60 20 L112 75" fill="none" stroke="#6f8c9f" stroke-width="7" stroke-linejoin="round"/><rect x="48" y="103" width="25" height="39" rx="2" fill="#9eb5c4"/><rect x="28" y="81" width="17" height="20" fill="#6bcfcf"/><rect x="75" y="81" width="17" height="20" fill="#6bcfcf"/>';
   return '';
@@ -64,6 +65,7 @@ const DEFINITIONS = [
   {type:'ac',title:'Sigen AC charger',route:'ac',keys:['ac_power','ac_state','ac_status','ac_today'],power:'ac_power'},
   {type:'dc',title:'Sigen DC charger',route:'dc',keys:['dc_power','dc_state','dc_status','dc_today'],power:'dc_power'},
   {type:'gateway',title:'Gateway',route:'gateway',keys:['gateway_state','grid_status','grid_power','home_power'],power:'grid_power'},
+  {type:'generator',title:'Generator',route:'generator',keys:['generator_power','generator_mode'],power:'generator_power'},
 ];
 
 /** Inventory controls installed/not-installed status; offline devices remain
@@ -85,6 +87,7 @@ export function deviceOverviewModel(ctx = {}) {
     if (!detail && definition.type==='storage' && power!==null) detail = Math.abs(power)<.03?'Idle':power>0?'Charging':'Discharging';
     if (!detail && definition.type==='ac') detail=stateText(ctx,'ac_state')||stateText(ctx,'ac_status');
     if (!detail && definition.type==='dc') detail=stateText(ctx,'dc_state')||stateText(ctx,'dc_status')||(power===null?'':Math.abs(power)<.03?'Idle':power>0?'Charging':'Discharging');
+    if (!detail && definition.type==='generator') detail=stateText(ctx,'generator_mode')||(power===null?'':Math.abs(power)<.03?'Off':'Running');
     if (!detail && definition.type==='gateway') detail=stateText(ctx,'gateway_state')||stateText(ctx,'grid_status')||(powerKey==='home_power'?'Home consumption':power===null?'':Math.abs(power)<.03?'Balanced':power>0?'Importing':'Exporting');
     result.push({...definition,route,power,soc,detail,offline,count:installed.length,id:['ac','dc','gateway'].includes(definition.type)&&installed.length===1?identity(installed[0]):''});
   }

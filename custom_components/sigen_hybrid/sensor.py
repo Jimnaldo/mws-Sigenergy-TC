@@ -71,9 +71,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([SigenSensor(entry.runtime_data, entry, description) for description in DESCRIPTIONS if description.key not in charger_keys])
     known_modules = set()
     known_chargers = set()
+    generator_added = False
 
     def add_modules():
+        nonlocal generator_added
         additions = []
+        if not generator_added and entry.runtime_data.cloud_data.get("generator", {}).get("settings", {}).get("present"):
+            generator_added = True
+            additions.extend(GeneratorSensor(entry.runtime_data, entry, description) for description in GENERATOR_DESCRIPTIONS)
         units = getattr(entry.runtime_data.local, "charger_units", {})
         inventory = entry.runtime_data.cloud_data.get("device_inventory", [])
         for kind in ("ac", "dc"):
@@ -106,6 +111,96 @@ MODULE_DESCRIPTIONS = (
     Description("total_discharge_kwh", "Total discharge", "kWh", "energy"),
     Description("heating", "Heating status"),
 )
+
+
+GENERATOR_DESCRIPTIONS = (
+    Description("power_kw", "Generator power", "kW", "power"),
+    Description("operation_mode", "Generator operating mode"),
+    Description("start_soc", "Generator start SOC", "%"),
+    Description("stop_soc", "Generator stop SOC", "%"),
+    Description("charging_stop_soc", "Generator charging stop SOC", "%"),
+    Description("max_power_percent", "Generator maximum power duty", "%"),
+    Description("rated_power_kw", "Generator rated power", "kW", "power"),
+    Description("time_of_use", "Generator time-of-use schedule"),
+)
+
+
+def generator_value(generator, key):
+    """Read-only values from the owner app's generator pages."""
+    settings = generator.get("settings", {}) if isinstance(generator, dict) else {}
+    periods = settings.get("time_of_use", {}).get("periods") or []
+    first = periods[0] if periods else {}
+    if key == "power_kw":
+        return generator.get("live", {}).get("power_kw")
+    if key in ("start_soc", "stop_soc"):
+        return first.get(key)
+    if key == "time_of_use":
+        enabled = settings.get("time_of_use", {}).get("enabled")
+        return None if enabled is None else ("on" if enabled else "off")
+    return settings.get(key)
+
+
+class GeneratorSensor(CoordinatorEntity, SensorEntity):
+    """Generator values read from the owner app; no generator control."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator, entry, description):
+        super().__init__(coordinator)
+        self.description = description
+        self._attr_unique_id = f"{entry.unique_id}_generator_{description.key}"
+        self._attr_name = description.name
+        self._attr_native_unit_of_measurement = description.unit
+        self._attr_device_class = description.device_class
+        if description.unit:
+            self._attr_state_class = "measurement"
+        if description.key != "power_kw":
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        rated = self._generator.get("settings", {}).get("rated_power_kw")
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.unique_id}_generator")},
+            via_device=(DOMAIN, entry.unique_id),
+            name="Sigen generator",
+            manufacturer="Sigenergy",
+            model=f"Generator {rated} kW" if rated is not None else "Generator",
+        )
+
+    @property
+    def _generator(self):
+        return self.coordinator.cloud_data.get("generator", {}) or {}
+
+    @property
+    def available(self):
+        if self.coordinator.cloud_error or not self._generator.get("settings", {}).get("present"):
+            return False
+        try:
+            clock = self._generator["live"]["retrieved_at"] if self.description.key == "power_kw" else self._generator["settings_observed_at"]
+            return -5 <= (utcnow() - datetime.fromisoformat(clock)).total_seconds() <= 1800
+        except KeyError, TypeError, ValueError:
+            return False
+
+    @property
+    def native_value(self):
+        return generator_value(self._generator, self.description.key) if self.available else None
+
+    @property
+    def extra_state_attributes(self):
+        settings = self._generator.get("settings", {})
+        attributes = {"data_source": "sigenergy_cloud_generator", "poll_interval_seconds": 900}
+        if self.description.key == "time_of_use":
+            attributes["periods"] = settings.get("time_of_use", {}).get("periods", [])
+        if self.description.key == "operation_mode":
+            attributes.update(
+                start_control_type=settings.get("start_control_type"),
+                exercise=settings.get("exercise"),
+                load_condition=settings.get("load_condition"),
+                transfer=settings.get("transfer"),
+                min_power_percent=settings.get("min_power_percent"),
+                cooling=settings.get("cooling"),
+            )
+        if self.description.key == "power_kw":
+            attributes["rows"] = self._generator.get("live", {}).get("rows", [])
+        return attributes
 
 
 class BatteryModuleSensor(CoordinatorEntity, SensorEntity):

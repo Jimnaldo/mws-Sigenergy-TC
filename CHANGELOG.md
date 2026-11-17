@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — generator (read-only)
+
+- Show a connected fuel generator as its own device when the owner app advertises one: live power and per-phase rows, operating mode, start/stop SOC, charging stop SOC, maximum power duty, rated power and time-of-use schedule.
+- Add a Generator detail view with the owner app's generator parameters, time-of-use periods, off-grid switch points, exercise and load-condition state. Values are read-only; no generator command is sent.
+- Plants without a generator are re-checked daily instead of every cloud cycle.
+
+See [generator](docs/generator.md).
+
 ## 0.2.10 — Public Beta
 
 - Use fresh charger status to disable Start while charging and Stop while idle. Keep Stop available for a waiting session accepted by TC.

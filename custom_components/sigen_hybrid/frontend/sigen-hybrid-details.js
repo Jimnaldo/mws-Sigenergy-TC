@@ -143,7 +143,7 @@ function artwork(ctx, type, item) {
   const picture = safeImage(item?.image);
   if (picture) return `<img class="detail-device-image" src="${esc(picture)}" alt="${esc(field(item, 'name', 'model') ?? type)}">`;
   const art = ctx.config?.images?.[ctx.night ? 'night' : 'day'] ?? {};
-  if (['solar','battery','battery_module','inverter','gateway','ac','dc'].includes(type)) return renderDeviceGraphic(type,{art,night:ctx.night});
+  if (['solar','battery','battery_module','inverter','gateway','ac','dc','generator'].includes(type)) return renderDeviceGraphic(type,{art,night:ctx.night});
   const source = safeImage(art[type === 'battery_module' ? 'battery' : type]);
   const crop = { battery: '476 553 127 268', battery_module: '476 553 127 268', gateway: '659 619 79 119', ac: ctx.night ? '55 482 53 88' : '50 489 42 84', dc: ctx.night ? '251 594 44 129' : '254 599 61 144' }[type];
   if (source && crop) return `<svg class="detail-device-image" viewBox="${crop}" role="img" aria-label="${esc(type.replaceAll('_', ' '))}"><image href="${esc(source)}" width="${type === 'dc' ? ctx.night ? 1125 : 1149 : 1170}" height="${type === 'dc' ? ctx.night ? 960 : 984 : type === 'ac' ? 1011 : 1013}"/></svg>`;
@@ -265,6 +265,22 @@ function gateway(ctx) {
   return { title: text(field(item, 'name') ?? 'Energy Gateway'), body: hero(ctx, 'gateway', item, 'Energy Gateway', firstStateText(ctx, ['grid_status', 'gateway_status']), metric(ctx, 'grid_power', 'Grid power', 'power', 'kW') + metric(ctx, 'home_power', 'Load power', 'power', 'kW'))
     + `<div class="detail-links">${nav('grid', 'Grid')}${nav('load', 'Load')}${deviceSettings(item, 'Gateway settings')}${deviceTools(item)}</div>${ctx.controlPermission===true&&ctx.capabilities?.grid_switch?.available===true?nav('grid_connection','Grid connection'): '<button type="button" class="detail-charging-disabled" disabled aria-disabled="true">Go Off-Grid</button>'}`
     + gatewaySide(ctx,'grid',item,'Grid side info') + gatewaySide(ctx,'generator',item,'Generator side info') + gatewaySide(ctx,'inverter',item,'Inverter side info') + phaseTable(ctx, 'backup', item?.entities || item?.realtime ? item : null, 'Backup side') + phaseTable(ctx, 'load', item?.entities || item?.realtime ? item : null, 'Load side') + parameters(item,[row('Communication status',deviceFact(ctx,item??{},['communication_status','gateway_communication_status'])),row('MAC address',deviceFact(ctx,item??{},['mac_address','mac']))],ctx,['communication_status','gateway_communication_status','mac_address','mac']) };
+}
+function generator(ctx) {
+  const power = value(ctx, 'generator_power'), mode = firstStateText(ctx, ['generator_mode']);
+  const attributes = state(ctx, 'generator_mode')?.attributes ?? {};
+  const periods = state(ctx, 'generator_time_of_use')?.attributes?.periods;
+  const percent = key => { const reading = value(ctx, key, 'number'); return reading === null ? '—' : `${reading} %`; };
+  const days = list => Array.isArray(list) && list.length ? (list.length === 7 ? 'Every day' : list.map(day => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][day] ?? day).join(', ')) : '—';
+  const until = period => { const [hours, minutes] = String(period.start ?? '').split(':').map(Number); const end = hours * 60 + minutes + Number(period.duration_minutes); return Number.isFinite(end) ? `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}` : '—'; };
+  const touRows = Array.isArray(periods) ? periods.flatMap((period, index) => [row(`Period ${index + 1}`, `${text(period.start)}–${until(period)}, ${days(period.weekdays)}`), row(`Period ${index + 1} start / stop SOC`, `${text(period.start_soc)} % / ${text(period.stop_soc)} %`), row(`Period ${index + 1} maximum load`, `${text(period.max_load_percent)} %`)]) : [];
+  const transfer = attributes.transfer ?? {};
+  return { title: 'Generator', body: hero(ctx, 'generator', null, 'Generator', mode || (power === null ? '—' : Math.abs(power) < .03 ? 'Off' : 'Running'), metric(ctx, 'generator_power', 'Generator power', 'power', 'kW') + more(ctx, 'generator_start_soc', 'Start SOC', `<small>Start SOC</small><strong>${esc(percent('generator_start_soc'))}</strong>`) + more(ctx, 'generator_stop_soc', 'Stop SOC', `<small>Stop SOC</small><strong>${esc(percent('generator_stop_soc'))}</strong>`))
+    + table('Generator parameters', [row('Operating mode', mode), row('Start control type', attributes.start_control_type), row('Rated power', fmt(value(ctx, 'generator_rated_power'), 'kW')), row('Maximum power duty', percent('generator_max_power')), row('Minimum power duty', absent(attributes.min_power_percent) ? '—' : `${attributes.min_power_percent} %`), row('Generator charging stop SOC', percent('generator_charging_stop_soc')), row('Cooling', attributes.cooling)], true)
+    + table('Time of use', [row('Schedule', firstStateText(ctx, ['generator_time_of_use'])), ...touRows], true)
+    + table('Off-grid switch parameters', [row('Over-voltage transfer point', absent(transfer.over_voltage_v) ? '—' : `${transfer.over_voltage_v} V`), row('Under-voltage transfer point', absent(transfer.under_voltage_v) ? '—' : `${transfer.under_voltage_v} V`), row('Over-frequency transfer point', absent(transfer.over_frequency_hz) ? '—' : `${transfer.over_frequency_hz} Hz`), row('Under-frequency transfer point', absent(transfer.under_frequency_hz) ? '—' : `${transfer.under_frequency_hz} Hz`)])
+    + table('Exercise and load condition', [row('Exercise', attributes.exercise?.enabled), row('Load condition', attributes.load_condition?.enabled)])
+    + '<p class="detail-note">Read from mySigen. Change generator settings in the mySigen app.</p>' };
 }
 function grid(ctx) {
   const power = value(ctx, 'grid_power'), direction = power === null ? '—' : Math.abs(power) < .03 ? 'Balanced' : power > 0 ? 'Importing' : 'Exporting';
@@ -533,7 +549,7 @@ function messageDetail(ctx) {
 }
 
 export function renderDeviceDetail(route, ctx = {}) {
-  const routes = { solar, load, battery, battery_module: batteryModule, inverter, gateway, grid, ac: context => charger(context, 'ac'), dc: context => charger(context, 'dc'), optimizer, strings, devices: deviceList, forecast, weather, battery_energy: batteryEnergy, plant, alerts, alert_history:context=>alertPage(context,true), alert_detail:alertDetail, system_about:systemAbout, software_update:softwareUpdate, warranty, warranty_download:warrantyDownload, care, sigen_care:care, diagnosis:diagnosisDetail, diagnosis_detail:diagnosisDetail, diagnosis_history:diagnosisHistory, modbus_server:modbusServer, support_history:supportHistory, service, messages, message_detail:messageDetail };
+  const routes = { solar, load, battery, generator, battery_module: batteryModule, inverter, gateway, grid, ac: context => charger(context, 'ac'), dc: context => charger(context, 'dc'), optimizer, strings, devices: deviceList, forecast, weather, battery_energy: batteryEnergy, plant, alerts, alert_history:context=>alertPage(context,true), alert_detail:alertDetail, system_about:systemAbout, software_update:softwareUpdate, warranty, warranty_download:warrantyDownload, care, sigen_care:care, diagnosis:diagnosisDetail, diagnosis_detail:diagnosisDetail, diagnosis_history:diagnosisHistory, modbus_server:modbusServer, support_history:supportHistory, service, messages, message_detail:messageDetail };
   const renderer = Object.hasOwn(routes, route) ? routes[route] : null;
   return renderer ? renderer(ctx) : { title: 'Details', body: '<div class="detail-empty">Details unavailable</div>' };
 }
