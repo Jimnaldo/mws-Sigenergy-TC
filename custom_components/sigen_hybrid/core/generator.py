@@ -14,12 +14,25 @@ from datetime import datetime
 SETTINGS_PATH = "device/tp-device/generator/v2/settings"
 REAL_TIME_PATH = "device/tp-device/generator/v2/real-time-info"
 
+# Native codes observed in the owner app (code -> app label). Unknown codes
+# are shown as "code N" instead of being guessed.
+OPERATION_MODES = {"0": "Auto"}
+START_CONTROL_TYPES = {"1": "two-wire-start"}
+
 _TIME = re.compile(r"(?:[01]\d|2[0-4]):[0-5]\d")
+
+
+_LEADING_NUMBER = re.compile(r"\s*(-?\d+(?:\.\d+)?)")
 
 
 def _number(value, low=None, high=None):
     if isinstance(value, bool) or value in (None, ""):
         return None
+    if isinstance(value, str):
+        match = _LEADING_NUMBER.match(value)
+        if not match or value[match.end():].strip() not in ("", "kW", "W", "A", "V", "Hz", "%", "kWh", "kvar", "kVar"):
+            return None
+        value = match.group(1)
     try:
         result = float(value)
     except (TypeError, ValueError, OverflowError):
@@ -45,6 +58,13 @@ def _text(value, limit=40):
     if type(value) is int:
         return str(value)
     return None
+
+
+def _label(value, labels):
+    code = _text(value)
+    if code is None:
+        return None
+    return labels.get(code, code if not code.isdigit() else f"code {code}")
 
 
 def _clock(value):
@@ -94,8 +114,8 @@ def generator_settings_data(raw):
     return {
         "present": enabled is not False,
         "enabled": enabled,
-        "start_control_type": _text(raw.get("startControlType")),
-        "operation_mode": _text(raw.get("operationMode")),
+        "start_control_type": _label(raw.get("startControlType"), START_CONTROL_TYPES),
+        "operation_mode": _label(raw.get("operationMode"), OPERATION_MODES),
         "manual_switch": _flag(raw.get("manualSwitch")),
         "rated_power_kw": _number(raw.get("ratedPower"), 0, 10000),
         "cooling": _flag(raw.get("coolingEnable")),

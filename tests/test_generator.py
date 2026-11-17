@@ -9,8 +9,8 @@ from custom_components.sigen_hybrid.core.generator import generator_live_data, g
 SETTINGS = {
     "stationId": 1,
     "enableGenerator": True,
-    "startControlType": "two-wire-start",
-    "operationMode": "Auto",
+    "startControlType": 1,
+    "operationMode": 0,
     "ratedPower": 6,
     "coolingEnable": False,
     "bestPowerDuty": 50,
@@ -137,3 +137,14 @@ async def test_plant_without_generator_is_rechecked_daily_not_every_cycle():
     cloud._fetched = float("-inf")
     await cloud.refresh()
     assert client.setting_reads == 1
+
+
+def test_unknown_native_codes_are_not_guessed():
+    data = generator_settings_data({**SETTINGS, "operationMode": 7, "startControlType": "x"})
+    assert data["operation_mode"] == "code 7"
+    assert data["start_control_type"] == "x"
+
+
+def test_phase_text_with_units_is_parsed():
+    rows = [{"paramKey": "Active Power", "paramValueUnit": "kW", "aphaseValueText": "0.990 kW", "bphaseValueText": "1.002", "cphaseValueText": "0.976 kW"}]
+    assert generator_live_data(rows, datetime(2026, 1, 1, tzinfo=timezone.utc))["power_kw"] == pytest.approx(2.968)
