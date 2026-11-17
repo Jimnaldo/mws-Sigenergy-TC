@@ -166,6 +166,15 @@ def generator_live_data(rows, now: datetime):
             continue
         key = row["paramKey"][:80]
         unit = row.get("paramValueUnit") if isinstance(row.get("paramValueUnit"), str) else ""
+        if not unit:
+            # Some rows carry the unit only in their value texts ("1.002 kW").
+            for field in ("paramValueText", "aphaseValueText", "bphaseValueText", "cphaseValueText"):
+                text = row.get(field)
+                match = _LEADING_NUMBER.match(text) if isinstance(text, str) else None
+                suffix = text[match.end():].strip() if match else ""
+                if suffix:
+                    unit = suffix
+                    break
         item = {
             "key": key,
             "unit": unit[:12],

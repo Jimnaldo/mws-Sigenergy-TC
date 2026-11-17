@@ -148,3 +148,10 @@ def test_unknown_native_codes_are_not_guessed():
 def test_phase_text_with_units_is_parsed():
     rows = [{"paramKey": "Active Power", "paramValueUnit": "kW", "aphaseValueText": "0.990 kW", "bphaseValueText": "1.002", "cphaseValueText": "0.976 kW"}]
     assert generator_live_data(rows, datetime(2026, 1, 1, tzinfo=timezone.utc))["power_kw"] == pytest.approx(2.968)
+
+
+def test_unit_is_taken_from_value_text_when_the_unit_field_is_empty():
+    rows = [{"paramKey": "Active Power", "paramValueUnit": "", "aphaseValueText": "1.002 kW", "bphaseValueText": "1.002 kW", "cphaseValueText": "1.018 kW"}]
+    live = generator_live_data(rows, datetime(2026, 1, 1, tzinfo=timezone.utc))
+    assert live["rows"][0]["unit"] == "kW"
+    assert live["power_kw"] == pytest.approx(3.022)
