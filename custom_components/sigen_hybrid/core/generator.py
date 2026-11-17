@@ -192,8 +192,17 @@ def generator_live_data(rows, now: datetime):
             item["phases"] = phases
         result["rows"].append(item)
     for item in result["rows"]:
-        if "active" in item["key"].lower() and "power" in item["key"].lower() and item["unit"] in _POWER_UNITS:
-            scale = _POWER_UNITS[item["unit"]]
+        if "active" in item["key"].lower() and "power" in item["key"].lower():
+            unit = item["unit"]
+            if not unit:
+                # The owner app labels these rows in kW. Without a unit, only
+                # accept magnitudes that cannot be watts of a running generator.
+                readings = list(item.get("phases", {}).values()) or [item["value"]]
+                readings = [value for value in readings if value is not None]
+                unit = "kW" if readings and max(abs(value) for value in readings) < 200 else ""
+            if unit not in _POWER_UNITS:
+                break
+            scale = _POWER_UNITS[unit]
             if item.get("phases"):
                 result["power_kw"] = round(sum(item["phases"].values()) * scale, 3)
             elif item["value"] is not None:

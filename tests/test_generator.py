@@ -155,3 +155,13 @@ def test_unit_is_taken_from_value_text_when_the_unit_field_is_empty():
     live = generator_live_data(rows, datetime(2026, 1, 1, tzinfo=timezone.utc))
     assert live["rows"][0]["unit"] == "kW"
     assert live["power_kw"] == pytest.approx(3.022)
+
+
+def test_unitless_active_power_in_kw_range_is_accepted():
+    rows = [{"paramKey": "Active Power", "aphaseValue": 1.002, "bphaseValue": 1.002, "cphaseValue": 1.018}]
+    assert generator_live_data(rows, datetime(2026, 1, 1, tzinfo=timezone.utc))["power_kw"] == pytest.approx(3.022)
+
+
+def test_unitless_active_power_in_watt_range_is_not_guessed():
+    rows = [{"paramKey": "Active Power", "aphaseValue": 1002, "bphaseValue": 1002, "cphaseValue": 1018}]
+    assert "power_kw" not in generator_live_data(rows, datetime(2026, 1, 1, tzinfo=timezone.utc))
