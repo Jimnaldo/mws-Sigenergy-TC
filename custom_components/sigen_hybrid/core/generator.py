@@ -284,9 +284,18 @@ def _project(value, shape):
     return value
 
 
-def owner_payload(dto):
-    """The settings exactly as the owner app posts them: its own fields only."""
-    return _project(dto, _PAYLOAD_SHAPE)
+def owner_payload(dto, station_id):
+    """The settings exactly as the owner app posts them: its own fields only.
+
+    The read response omits the plant and the enabled flag; the owner app fills
+    both in (an existing generator page is always enabled). Without them the
+    cloud answers code 13000 "device base not found".
+    """
+    payload = _project(dto, _PAYLOAD_SHAPE)
+    payload["stationId"] = int(station_id)
+    if payload["enableGenerator"] is None:
+        payload["enableGenerator"] = 1
+    return payload
 WRITABLE = (
     "operation_mode",
     "generator_start",

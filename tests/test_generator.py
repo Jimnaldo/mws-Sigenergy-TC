@@ -240,8 +240,6 @@ def test_owner_payload_matches_the_owner_app_fields():
     from custom_components.sigen_hybrid.core.generator import owner_payload
 
     raw = {
-        "stationId": 1,
-        "enableGenerator": 1,
         "startControlType": 1,
         "operationMode": 0,
         "ratedPower": 6,
@@ -274,7 +272,9 @@ def test_owner_payload_matches_the_owner_app_fields():
             "frequencyBaseValue": 50,
         },
     }
-    out = owner_payload(raw)
+    out = owner_payload(raw, "12024101700031")
+    assert out["stationId"] == 12024101700031
+    assert out["enableGenerator"] == 1
     assert "extra" not in out
     assert "voltageBaseValue" not in out["onOffSwitchParams"]
     assert "id" not in out["loadTouParamsDTO"]["touTimeParamsDTOList"][0]

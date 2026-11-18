@@ -173,10 +173,10 @@ async def async_setup(hass, config):
                 if dry_run or not changes:
                     result["status"] = "preview" if changes else "unchanged"
                     if changes:
-                        result["payload"] = owner_payload(new)
+                        result["payload"] = owner_payload(new, controls.station_id)
                     return result
                 try:
-                    await provider.client._envelope("POST", WRITE_PATH, json=owner_payload(new))
+                    await provider.client._envelope("POST", WRITE_PATH, json=owner_payload(new, controls.station_id))
                 except Exception as err:  # noqa: BLE001 - report only status and API code/message
                     raise HomeAssistantError(f"Generator write rejected: {_cloud_error_summary(err)}") from None
                 readback = await provider._request("GET", SETTINGS_PATH, params=params)
