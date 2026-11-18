@@ -218,9 +218,75 @@ def generator_live_data(rows, now: datetime):
 # reads. TC always starts from a fresh read, changes only the requested
 # field(s), validates the result and verifies by reading back.
 
-# The owner app saves through this exact path (with the double slash); the single-slash
-# form answers code 13000 "device base not found".
-WRITE_PATH = "device//tp-device/generator/v2/settings"
+# Observed from the owner app: POST to the read path with exactly the fields of
+# its own settings model. Sending the read response as-is (with its extra
+# fields) is answered with code 13000 "device base not found".
+WRITE_PATH = SETTINGS_PATH
+_PAYLOAD_SHAPE = {
+    "stationId": None,
+    "enableGenerator": None,
+    "startControlType": None,
+    "operationMode": None,
+    "ratedPower": None,
+    "bestPowerDuty": None,
+    "manualSwitch": None,
+    "loadTouParamsDTO": {
+        "socEnable": None,
+        "touEnable": None,
+        "touNum": None,
+        "touTimeParamsDTOList": [
+            {
+                "startTime": None,
+                "duration": None,
+                "periodConfig": None,
+                "autoPowerOnThresholdSoc": None,
+                "autoPowerOffThresholdSoc": None,
+                "maxLoadRatio": None,
+            }
+        ],
+    },
+    "cutOffSoc": None,
+    "exerciseParamsDTO": {
+        "startEnable": None,
+        "startInterval": None,
+        "startDay": None,
+        "startTime": None,
+        "runTime": None,
+    },
+    "loadConditionParamsDTO": {
+        "startStopByLoadPower": None,
+        "loadPowerMeasurementType": None,
+        "startTotalLoadPowerThreshold": None,
+        "endTotalLoadPowerThreshold": None,
+        "startPhaseLoadPowerThreshold": None,
+        "endPhaseLoadPowerThreshold": None,
+    },
+    "minimumLoadRatio": None,
+    "coolingEnable": None,
+    "onOffSwitchParams": {
+        "overVoltageTransferPoint": None,
+        "underVoltageTransferPoint": None,
+        "overFrequencyTransferPoint": None,
+        "underFrequencyTransferPoint": None,
+    },
+}
+
+
+def _project(value, shape):
+    if isinstance(shape, dict):
+        if not isinstance(value, dict):
+            return None
+        return {key: _project(value.get(key), sub) for key, sub in shape.items()}
+    if isinstance(shape, list):
+        if not isinstance(value, list):
+            return None
+        return [_project(item, shape[0]) for item in value]
+    return value
+
+
+def owner_payload(dto):
+    """The settings exactly as the owner app posts them: its own fields only."""
+    return _project(dto, _PAYLOAD_SHAPE)
 WRITABLE = (
     "operation_mode",
     "generator_start",

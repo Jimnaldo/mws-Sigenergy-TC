@@ -234,3 +234,50 @@ def test_readback_verification():
     assert not verify_update(NATIVE, changes)
     manual, changes = generator_update(NATIVE, "operation_mode", "manual")
     assert verify_update({**manual, "operationMode": "1"}, changes)
+
+
+def test_owner_payload_matches_the_owner_app_fields():
+    from custom_components.sigen_hybrid.core.generator import owner_payload
+
+    raw = {
+        "stationId": 1,
+        "enableGenerator": 1,
+        "startControlType": 1,
+        "operationMode": 0,
+        "ratedPower": 6,
+        "bestPowerDuty": 50,
+        "manualSwitch": None,
+        "extra": "dropped",
+        "loadTouParamsDTO": {
+            "socEnable": None,
+            "touEnable": 1,
+            "touNum": 1,
+            "touTimeParamsDTOList": [
+                {
+                    "startTime": "0",
+                    "duration": "1440",
+                    "periodConfig": [1, 1, 1, 1, 1, 1, 1],
+                    "autoPowerOnThresholdSoc": 35,
+                    "autoPowerOffThresholdSoc": 60,
+                    "maxLoadRatio": 100,
+                    "id": 9,
+                }
+            ],
+        },
+        "cutOffSoc": 95,
+        "onOffSwitchParams": {
+            "overVoltageTransferPoint": 253,
+            "underVoltageTransferPoint": 184,
+            "overFrequencyTransferPoint": 55,
+            "underFrequencyTransferPoint": 45,
+            "voltageBaseValue": 230,
+            "frequencyBaseValue": 50,
+        },
+    }
+    out = owner_payload(raw)
+    assert "extra" not in out
+    assert "voltageBaseValue" not in out["onOffSwitchParams"]
+    assert "id" not in out["loadTouParamsDTO"]["touTimeParamsDTOList"][0]
+    assert out["loadTouParamsDTO"]["touTimeParamsDTOList"][0]["autoPowerOffThresholdSoc"] == 60
+    assert out["exerciseParamsDTO"] is None
+    assert list(out)[:4] == ["stationId", "enableGenerator", "startControlType", "operationMode"]

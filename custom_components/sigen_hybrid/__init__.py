@@ -138,7 +138,14 @@ async def async_setup(hass, config):
 
     async def generator_setting(call):
         """Preview or apply one closed generator setting from the owner app's generator page."""
-        from .core.generator import SETTINGS_PATH, WRITE_PATH, generator_settings_data, generator_update, verify_update
+        from .core.generator import (
+            SETTINGS_PATH,
+            WRITE_PATH,
+            generator_settings_data,
+            generator_update,
+            owner_payload,
+            verify_update,
+        )
 
         runtime = await coordinator(call, refresh=False)
         dry_run = call.data["dry_run"]
@@ -167,7 +174,7 @@ async def async_setup(hass, config):
                     result["status"] = "preview" if changes else "unchanged"
                     return result
                 try:
-                    await provider.client._envelope("POST", WRITE_PATH, json=new)
+                    await provider.client._envelope("POST", WRITE_PATH, json=owner_payload(new))
                 except Exception as err:  # noqa: BLE001 - report only status and API code/message
                     raise HomeAssistantError(f"Generator write rejected: {_cloud_error_summary(err)}") from None
                 readback = await provider._request("GET", SETTINGS_PATH, params=params)
