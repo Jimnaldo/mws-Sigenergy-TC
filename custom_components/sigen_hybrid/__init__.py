@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import asdict
 from datetime import timedelta
@@ -179,7 +180,13 @@ async def async_setup(hass, config):
                     await provider.client._envelope("POST", WRITE_PATH, json=owner_payload(new, controls.station_id))
                 except Exception as err:  # noqa: BLE001 - report only status and API code/message
                     raise HomeAssistantError(f"Generator write rejected: {_cloud_error_summary(err)}") from None
-                readback = await provider._request("GET", SETTINGS_PATH, params=params)
+                # The cloud can return the previous settings for a few seconds after a save.
+                for attempt in range(4):
+                    if attempt:
+                        await asyncio.sleep(5)
+                    readback = await provider._request("GET", SETTINGS_PATH, params=params)
+                    if verify_update(readback, changes):
+                        break
                 result["status"] = "applied" if verify_update(readback, changes) else "unverified"
                 settings = generator_settings_data(readback)
                 generator = dict(runtime.cloud_data.get("generator") or {})
