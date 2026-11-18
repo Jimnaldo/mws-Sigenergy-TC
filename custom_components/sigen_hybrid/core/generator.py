@@ -414,6 +414,9 @@ def verify_update(readback, changes):
         return data
 
     def same(a, b):
+        numbers = (int, float)
+        if isinstance(a, numbers) and isinstance(b, numbers) and not isinstance(a, bool) and not isinstance(b, bool):
+            return float(a) == float(b)
         return str(a).lower() == str(b).lower() or (a in (0, False) and b in (0, False)) or (a in (1, True) and b in (1, True))
 
     path_of = {"operationMode": "operationMode", "manualSwitch": "manualSwitch", "cutOffSoc": "cutOffSoc", "bestPowerDuty": "bestPowerDuty"}

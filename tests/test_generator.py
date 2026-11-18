@@ -293,3 +293,10 @@ def test_verify_accepts_the_top_level_soc_mirror():
     change = [("touTimeParamsDTOList[0].autoPowerOffThresholdSoc", 64, 65)]
     assert verify_update(readback, change)
     assert not verify_update({"autoPowerOffThresholdSoc": 64}, change)
+
+
+def test_verify_treats_float_readback_as_the_same_number():
+    from custom_components.sigen_hybrid.core.generator import verify_update
+
+    readback = {"loadTouParamsDTO": {"touTimeParamsDTOList": [{"autoPowerOffThresholdSoc": 65.0}]}}
+    assert verify_update(readback, [("touTimeParamsDTOList[0].autoPowerOffThresholdSoc", 64.0, 65)])
