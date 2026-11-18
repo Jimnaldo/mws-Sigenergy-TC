@@ -281,3 +281,15 @@ def test_owner_payload_matches_the_owner_app_fields():
     assert out["loadTouParamsDTO"]["touTimeParamsDTOList"][0]["autoPowerOffThresholdSoc"] == 60
     assert out["exerciseParamsDTO"] is None
     assert list(out)[:4] == ["stationId", "enableGenerator", "startControlType", "operationMode"]
+
+
+def test_verify_accepts_the_top_level_soc_mirror():
+    from custom_components.sigen_hybrid.core.generator import verify_update
+
+    readback = {
+        "autoPowerOffThresholdSoc": 65,
+        "loadTouParamsDTO": {"touTimeParamsDTOList": [{"autoPowerOffThresholdSoc": 64}]},
+    }
+    change = [("touTimeParamsDTOList[0].autoPowerOffThresholdSoc", 64, 65)]
+    assert verify_update(readback, change)
+    assert not verify_update({"autoPowerOffThresholdSoc": 64}, change)

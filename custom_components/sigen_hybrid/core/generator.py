@@ -419,6 +419,13 @@ def verify_update(readback, changes):
     path_of = {"operationMode": "operationMode", "manualSwitch": "manualSwitch", "cutOffSoc": "cutOffSoc", "bestPowerDuty": "bestPowerDuty"}
     for field, _old, new in changes:
         path = path_of.get(field) or field.replace("touTimeParamsDTOList", "loadTouParamsDTO.touTimeParamsDTOList")
-        if not same(get(readback, path), new):
-            return False
+        if same(get(readback, path), new):
+            continue
+        # The cloud mirrors the first period's SOC thresholds at the top level and
+        # updates that mirror before the period list itself.
+        mirror = field.removeprefix("touTimeParamsDTOList[0].")
+        if mirror != field and mirror in ("autoPowerOnThresholdSoc", "autoPowerOffThresholdSoc"):
+            if same(readback.get(mirror) if isinstance(readback, dict) else None, new):
+                continue
+        return False
     return True
