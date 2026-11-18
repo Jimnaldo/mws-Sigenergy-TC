@@ -218,7 +218,9 @@ def generator_live_data(rows, now: datetime):
 # reads. TC always starts from a fresh read, changes only the requested
 # field(s), validates the result and verifies by reading back.
 
-WRITE_PATH = SETTINGS_PATH
+# The owner app saves through this exact path (with the double slash); the single-slash
+# form answers code 13000 "device base not found".
+WRITE_PATH = "device//tp-device/generator/v2/settings"
 WRITABLE = (
     "operation_mode",
     "generator_start",
