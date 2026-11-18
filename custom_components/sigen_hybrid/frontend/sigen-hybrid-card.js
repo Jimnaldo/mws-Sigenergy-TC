@@ -1,4 +1,4 @@
-import { chargerStatus, overrideModel, renderOverride, STATUS_STYLE } from './sigen-hybrid-status.js?v=0.2.10.2';
+import { chargerStatus, overrideModel, renderOverride, STATUS_STYLE } from './sigen-hybrid-status.js?v=0.2.10.3';
 /* SPDX-License-Identifier: GPL-3.0-only
  * Sigenergy TC dashboard components. Third-party artwork attribution is
  * retained in sigen-hybrid-photo.js and THIRD_PARTY_NOTICES.md.
@@ -21,15 +21,15 @@ import { chargerStatus, overrideModel, renderOverride, STATUS_STYLE } from './si
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-import { installNavigation, CARD_PRESETS, CARD_CHART_CHOICES } from './sigen-hybrid-navigation.js?v=0.2.10.2';
-import { installHostFit } from './sigen-hybrid-fit.js?v=0.2.10.2';
-import { WIDGET_ROUTES } from './sigen-hybrid-widgets.js?v=0.2.10.2';
-import { renderPhotoScene, PHOTO_STYLE } from './sigen-hybrid-photo.js?v=0.2.10.2';
-import { renderTodayEnergy, renderBatteryLevel, renderChargerControls, renderMobilePower, OVERVIEW_STYLE } from './sigen-hybrid-overview.js?v=0.2.10.2';
-import { energySankey as buildEnergySankey } from './sigen-hybrid-sankey.js?v=0.2.10.2';
-import { renderHouseScene, HOUSE_STYLE } from './sigen-hybrid-house.js?v=0.2.10.2';
-import { renderDeviceOverview, DEVICE_STYLE } from './sigen-hybrid-devices.js?v=0.2.10.2';
-import { gridConnectionStatus, connectionIndicators, selectReadingState } from './sigen-hybrid-energy.js?v=0.2.10.2';
+import { installNavigation, CARD_PRESETS, CARD_CHART_CHOICES } from './sigen-hybrid-navigation.js?v=0.2.10.3';
+import { installHostFit } from './sigen-hybrid-fit.js?v=0.2.10.3';
+import { WIDGET_ROUTES } from './sigen-hybrid-widgets.js?v=0.2.10.3';
+import { renderPhotoScene, PHOTO_STYLE } from './sigen-hybrid-photo.js?v=0.2.10.3';
+import { renderTodayEnergy, renderBatteryLevel, renderChargerControls, renderMobilePower, OVERVIEW_STYLE } from './sigen-hybrid-overview.js?v=0.2.10.3';
+import { energySankey as buildEnergySankey } from './sigen-hybrid-sankey.js?v=0.2.10.3';
+import { renderHouseScene, HOUSE_STYLE } from './sigen-hybrid-house.js?v=0.2.10.3';
+import { renderDeviceOverview, DEVICE_STYLE } from './sigen-hybrid-devices.js?v=0.2.10.3';
+import { gridConnectionStatus, connectionIndicators, selectReadingState } from './sigen-hybrid-energy.js?v=0.2.10.3';
 export const MAIN_DISPLAYS = Object.freeze({ house: 'House', flow: 'Flow', photo: 'Photo house' });
 const COLORS = { solar: '#efc900', battery: '#26c9c8', grid: '#6694ff', home: '#a45bf0', ac: '#b46767', dc: '#d29420' };
 const LABELS = { solar: 'Solar', battery: 'Battery', grid: 'Grid', home: 'Home', ac: 'AC charger', dc: 'DC charger' };
@@ -235,6 +235,17 @@ export class SigenHybridCard extends HTMLElement {
     return `<div class="connection-strip" aria-label="Connections">${this._connectionOverview().map(item=>`<button type="button" class="connection-indicator" data-connection="${item.key}" data-tone="${item.tone}" data-detail="connections" aria-label="${esc(`${item.label}: ${item.description}`)}" title="${esc(item.description)}"><i aria-hidden="true"></i>${item.label}</button>`).join('')}</div>`;
   }
   _now() { const snapshot = Date.parse(this._config?.snapshot_at ?? ''); return Number.isFinite(snapshot) ? snapshot : Date.now(); }
+  async _generatorAction(action,button){
+    const plan={auto:['operation_mode','auto','Put the generator back in Auto?'],manual:['operation_mode','manual','Switch the generator to Manual? It will then not start on low SOC until you return it to Auto.'],start:['generator_start',true,'Start the generator now?'],stop:['generator_start',false,'Stop the generator now?']}[action];
+    if(!plan||!this._config?.config_entry||typeof this._hass?.callWS!=='function')return;
+    if(!window.confirm(plan[2]))return;
+    const notice=this._detailDialog?.querySelector('.detail-save-notice');const say=text=>{if(notice){notice.hidden=false;notice.textContent=text;}};
+    this._detailDialog?.querySelectorAll('[data-generator-action]').forEach(item=>{item.disabled=true;});say('Sending to mySigen…');
+    try{const response=await this._hass.callWS({type:'call_service',domain:'sigen_hybrid',service:'generator_setting',return_response:true,service_data:{config_entry:this._config.config_entry,setting:plan[0],value:plan[1],dry_run:false}});
+      const status=response?.response?.status;say(status==='applied'?'Saved and confirmed by mySigen.':status==='unchanged'?'Already set.':'Sent; waiting for confirmation.');
+      setTimeout(()=>{if(this._detailDialog)this._openDetail('generator',undefined,true);},1500);
+    }catch(error){say(`Not changed: ${error?.message??'mySigen refused the change'}`);this._detailDialog?.querySelectorAll('[data-generator-action]').forEach(item=>{item.disabled=item.getAttribute('aria-pressed')==='true';});}
+  }
   _value(key, kind = 'power') { return measurement(this._state(key), kind); }
   _has(key) {
     if (Object.hasOwn(this._config?.entities ?? {}, key) && this._config.entities[key] === null) return false;

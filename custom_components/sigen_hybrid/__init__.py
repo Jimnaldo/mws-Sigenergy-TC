@@ -115,6 +115,50 @@ async def async_setup(hass, config):
         except SigenError as err:
             raise HomeAssistantError(str(err)) from None
 
+    async def generator_setting(call):
+        """Preview or apply one closed generator setting from the owner app's generator page."""
+        from .core.generator import SETTINGS_PATH, WRITE_PATH, generator_settings_data, generator_update, verify_update
+
+        runtime = await coordinator(call, refresh=False)
+        dry_run = call.data["dry_run"]
+        if not dry_run and call.context.user_id is not None:
+            user = await hass.auth.async_get_user(call.context.user_id)
+            if user is None or not user.is_admin:
+                raise HomeAssistantError("Only an administrator may change generator settings")
+        controls = runtime.controls
+        if controls is None or not controls.enabled:
+            raise HomeAssistantError("Enable cloud control in Sigenergy TC to change generator settings")
+        try:
+            async with controls.operation_lock:
+                session = await controls._bind()
+                provider = session.journal.provider
+                params = {"stationId": int(controls.station_id)}
+                raw = await provider._request("GET", SETTINGS_PATH, params=params)
+                new, changes = generator_update(raw, call.data["setting"], call.data["value"])
+                result = {
+                    "setting": call.data["setting"],
+                    "dry_run": dry_run,
+                    "changes": [{"field": field, "from": old, "to": value} for field, old, value in changes],
+                }
+                if dry_run or not changes:
+                    result["status"] = "preview" if changes else "unchanged"
+                    return result
+                await provider._request("POST", WRITE_PATH, json=new)
+                readback = await provider._request("GET", SETTINGS_PATH, params=params)
+                result["status"] = "applied" if verify_update(readback, changes) else "unverified"
+                settings = generator_settings_data(readback)
+                generator = dict(runtime.cloud_data.get("generator") or {})
+                if settings.get("present"):
+                    generator["settings"] = settings
+                    generator["settings_observed_at"] = utcnow().isoformat()
+                    runtime.cloud_data["generator"] = generator
+                    runtime.async_update_listeners()
+                if result["status"] != "applied":
+                    raise HomeAssistantError("The generator did not confirm the new setting; check mySigen")
+                return result
+        except SigenError as err:
+            raise HomeAssistantError(str(err)) from None
+
     async def preview_plan(call):
         runtime = await coordinator(call)
         if runtime.data is None or not runtime.last_update_success or runtime.local_error:
@@ -171,6 +215,20 @@ async def async_setup(hass, config):
             vol.Optional("dry_run", default=True): bool,
             vol.Optional("serial"): vol.All(str, vol.Length(min=1, max=80)),
             vol.Optional("expected_revision"): vol.All(str, vol.Match(r"^[0-9a-f]{64}$")),
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "generator_setting",
+        generator_setting,
+        schema=vol.Schema({
+            vol.Required("config_entry"): str,
+            vol.Required("setting"): vol.In(
+                ["operation_mode", "generator_start", "start_soc", "stop_soc", "charging_stop_soc", "max_power_percent", "time_of_use"]
+            ),
+            vol.Required("value"): vol.Any(bool, int, str, dict),
+            vol.Optional("dry_run", default=True): bool,
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

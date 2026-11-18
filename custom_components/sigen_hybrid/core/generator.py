@@ -16,7 +16,7 @@ REAL_TIME_PATH = "device/tp-device/generator/v2/real-time-info"
 
 # Native codes observed in the owner app (code -> app label). Unknown codes
 # are shown as "code N" instead of being guessed.
-OPERATION_MODES = {"0": "Auto"}
+OPERATION_MODES = {"0": "Auto", "1": "Manual"}
 START_CONTROL_TYPES = {"1": "two-wire-start"}
 
 _TIME = re.compile(r"(?:[01]\d|2[0-4]):[0-5]\d")
@@ -117,6 +117,7 @@ def generator_settings_data(raw):
         "start_control_type": _label(raw.get("startControlType"), START_CONTROL_TYPES),
         "operation_mode": _label(raw.get("operationMode"), OPERATION_MODES),
         "manual_switch": _flag(raw.get("manualSwitch")),
+        "generator_start": _flag(raw.get("manualSwitch")),
         "rated_power_kw": _number(raw.get("ratedPower"), 0, 10000),
         "cooling": _flag(raw.get("coolingEnable")),
         "max_power_percent": _number(raw.get("bestPowerDuty"), 0, 100),
@@ -209,3 +210,138 @@ def generator_live_data(rows, now: datetime):
                 result["power_kw"] = round(item["value"] * scale, 3)
             break
     return result
+
+
+# --- Owner writes (closed allowlist) -------------------------------------
+#
+# The owner app saves the whole settings DTO with POST to the same path it
+# reads. TC always starts from a fresh read, changes only the requested
+# field(s), validates the result and verifies by reading back.
+
+WRITE_PATH = SETTINGS_PATH
+WRITABLE = (
+    "operation_mode",
+    "generator_start",
+    "start_soc",
+    "stop_soc",
+    "charging_stop_soc",
+    "max_power_percent",
+    "time_of_use",
+)
+MODE_CODES = {"auto": 0, "manual": 1}
+
+
+def _same_type(current, code):
+    """Keep the native wire type (int or numeric string)."""
+    return str(code) if isinstance(current, str) else code
+
+
+def _soc(value):
+    if type(value) is not int or not 0 <= value <= 100:
+        from .errors import SafetyError
+
+        raise SafetyError("SOC must be a whole percentage from 0 to 100")
+    return value
+
+
+def _period_value(value):
+    """An int targets period 1; {"period": n, "value": x} targets period n."""
+    from .errors import SafetyError
+
+    if type(value) is int:
+        return 0, value
+    if isinstance(value, dict) and set(value) == {"period", "value"} and type(value["period"]) is int and value["period"] >= 1:
+        return value["period"] - 1, value["value"]
+    raise SafetyError("Give a whole SOC, or {period, value}")
+
+
+def generator_update(raw, setting, value):
+    """Return (new_dto, changes) for one closed generator setting.
+
+    `changes` lists (field, old, new). Nothing outside the allowlist changes.
+    """
+    import copy
+
+    from .errors import CapabilityError, SafetyError
+
+    if setting not in WRITABLE:
+        raise SafetyError("Unsupported generator setting")
+    if not isinstance(raw, dict) or not raw or raw.get("enableGenerator") is False:
+        raise CapabilityError("No generator is configured for this plant")
+    new = copy.deepcopy(raw)
+    changes = []
+
+    def put(container, key, label, target):
+        old = container.get(key)
+        if old != target:
+            container[key] = target
+            changes.append((label, old, target))
+
+    if setting == "operation_mode":
+        if value not in MODE_CODES:
+            raise SafetyError("Generator mode must be auto or manual")
+        put(new, "operationMode", "operationMode", _same_type(raw.get("operationMode"), MODE_CODES[value]))
+        if value == "auto":
+            # Leaving manual must never leave a manual start latched.
+            if new.get("manualSwitch") not in (None, False, 0):
+                put(new, "manualSwitch", "manualSwitch", False if type(raw.get("manualSwitch")) is bool else 0)
+    elif setting == "generator_start":
+        if type(value) is not bool:
+            raise SafetyError("Generator start must be true or false")
+        mode = str(new.get("operationMode"))
+        if value and mode != str(MODE_CODES["manual"]):
+            raise SafetyError("Switch the generator to manual before starting it")
+        put(new, "manualSwitch", "manualSwitch", value if type(raw.get("manualSwitch")) is not int else int(value))
+    elif setting == "charging_stop_soc":
+        put(new, "cutOffSoc", "cutOffSoc", _soc(value))
+    elif setting == "max_power_percent":
+        if type(value) is not int or not 1 <= value <= 100:
+            raise SafetyError("Maximum power duty must be 1–100 %")
+        minimum = new.get("minimumLoadRatio")
+        if isinstance(minimum, (int, float)) and value < minimum:
+            raise SafetyError("Maximum power duty must not be below the minimum power duty")
+        put(new, "bestPowerDuty", "bestPowerDuty", value)
+    elif setting == "time_of_use":
+        if type(value) is not bool:
+            raise SafetyError("Time of use must be true or false")
+        tou = new.get("loadTouParamsDTO")
+        if not isinstance(tou, dict):
+            raise SafetyError("Time-of-use settings are missing")
+        put(tou, "touEnable", "loadTouParamsDTO.touEnable", value)
+    else:  # start_soc / stop_soc
+        index, soc = _period_value(value)
+        soc = _soc(soc)
+        periods = (new.get("loadTouParamsDTO") or {}).get("touTimeParamsDTOList")
+        if not isinstance(periods, list) or not 0 <= index < len(periods) or not isinstance(periods[index], dict):
+            raise SafetyError("That time-of-use period does not exist")
+        period = periods[index]
+        key = "autoPowerOnThresholdSoc" if setting == "start_soc" else "autoPowerOffThresholdSoc"
+        put(period, key, f"touTimeParamsDTOList[{index}].{key}", soc)
+        start, stop = period.get("autoPowerOnThresholdSoc"), period.get("autoPowerOffThresholdSoc")
+        if isinstance(start, (int, float)) and isinstance(stop, (int, float)) and stop <= start:
+            raise SafetyError("The stop SOC must be above the start SOC")
+    return new, changes
+
+
+def verify_update(readback, changes):
+    """True when every changed field reads back with its new value."""
+
+    def get(data, path):
+        for part in path.replace("]", "").split("."):
+            if "[" in part:
+                name, index = part.split("[")
+                data = (data or {}).get(name)
+                data = data[int(index)] if isinstance(data, list) and int(index) < len(data) else None
+            else:
+                data = data.get(part) if isinstance(data, dict) else None
+        return data
+
+    def same(a, b):
+        return str(a).lower() == str(b).lower() or (a in (0, False) and b in (0, False)) or (a in (1, True) and b in (1, True))
+
+    path_of = {"operationMode": "operationMode", "manualSwitch": "manualSwitch", "cutOffSoc": "cutOffSoc", "bestPowerDuty": "bestPowerDuty"}
+    for field, _old, new in changes:
+        path = path_of.get(field) or field.replace("touTimeParamsDTOList", "loadTouParamsDTO.touTimeParamsDTOList")
+        if not same(get(readback, path), new):
+            return False
+    return True

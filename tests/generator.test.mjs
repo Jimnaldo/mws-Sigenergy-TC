@@ -30,7 +30,7 @@ test('no generator tile without generator entities',()=>{
 test('generator detail shows read-only settings and schedule',()=>{
   const detail=renderDeviceDetail('generator',ctx);
   assert.equal(detail.title,'Generator');
-  for(const expected of ['two-wire-start','95 %','50 %','00:00–24:00, Every day','35 % / 65 %','184 V','45 Hz','Change generator settings in the mySigen app'])
+  for(const expected of ['two-wire-start','95 %','50 %','00:00–24:00, Every day','35 % / 65 %','184 V','45 Hz','Enable cloud control in Sigenergy TC'])
     assert.ok(detail.body.includes(expected),expected);
   assert.ok(!detail.body.includes('<script'));
 });
@@ -38,4 +38,14 @@ test('generator detail shows read-only settings and schedule',()=>{
 test('generator graphic is a decorative vector',()=>{
   const html=renderDeviceGraphic('generator');
   assert.ok(html.includes('data-device-graphic="generator"')&&html.includes('is-vector'));
+});
+
+test('generator controls appear only with live control, and start/stop only in manual',()=>{
+  const live={...states,control_status:{state:'idle',attributes:{live_writes_locked:false}}};
+  const make=extra=>({entities:Object.fromEntries(Object.keys(extra).map(key=>[key,`sensor.test_${key}`])),state:key=>extra[key],value:key=>extra[key]?Number(extra[key].state):null});
+  const auto=renderDeviceDetail('generator',make(live)).body;
+  assert.ok(auto.includes('data-generator-action="manual"')&&!auto.includes('data-generator-action="start"'));
+  const manual=renderDeviceDetail('generator',make({...live,generator_mode:{state:'Manual',attributes:{...states.generator_mode.attributes,generator_start:false}}})).body;
+  assert.ok(manual.includes('data-generator-action="start"')&&manual.includes('data-generator-action="auto"'));
+  assert.ok(/data-generator-action="stop" aria-pressed="true" disabled/.test(manual));
 });

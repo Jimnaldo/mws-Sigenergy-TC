@@ -165,3 +165,72 @@ def test_unitless_active_power_in_kw_range_is_accepted():
 def test_unitless_active_power_in_watt_range_is_not_guessed():
     rows = [{"paramKey": "Active Power", "aphaseValue": 1002, "bphaseValue": 1002, "cphaseValue": 1018}]
     assert "power_kw" not in generator_live_data(rows, datetime(2026, 1, 1, tzinfo=timezone.utc))
+
+
+# --- writes -----------------------------------------------------------------
+from custom_components.sigen_hybrid.core.errors import CapabilityError, SafetyError  # noqa: E402
+from custom_components.sigen_hybrid.core.generator import generator_update, verify_update  # noqa: E402
+
+NATIVE = {**SETTINGS, "operationMode": 0, "startControlType": 1}
+
+
+def test_switching_to_manual_changes_only_the_mode():
+    new, changes = generator_update(NATIVE, "operation_mode", "manual")
+    assert changes == [("operationMode", 0, 1)]
+    assert {k: v for k, v in new.items() if k != "operationMode"} == {k: v for k, v in NATIVE.items() if k != "operationMode"}
+
+
+def test_back_to_auto_releases_a_latched_manual_start():
+    manual = {**NATIVE, "operationMode": 1, "manualSwitch": True}
+    new, changes = generator_update(manual, "operation_mode", "auto")
+    assert new["operationMode"] == 0 and new["manualSwitch"] is False
+    assert ("manualSwitch", True, False) in changes
+
+
+def test_native_string_mode_codes_stay_strings():
+    new, _ = generator_update({**NATIVE, "operationMode": "0"}, "operation_mode", "manual")
+    assert new["operationMode"] == "1"
+
+
+def test_start_is_refused_in_auto_mode():
+    with pytest.raises(SafetyError):
+        generator_update(NATIVE, "generator_start", True)
+
+
+def test_start_in_manual_mode():
+    new, changes = generator_update({**NATIVE, "operationMode": 1}, "generator_start", True)
+    assert new["manualSwitch"] is True and changes == [("manualSwitch", False, True)]
+
+
+def test_stop_soc_must_stay_above_start_soc():
+    with pytest.raises(SafetyError):
+        generator_update(NATIVE, "stop_soc", 30)
+    with pytest.raises(SafetyError):
+        generator_update(NATIVE, "start_soc", 65)
+    new, changes = generator_update(NATIVE, "start_soc", 40)
+    assert new["loadTouParamsDTO"]["touTimeParamsDTOList"][0]["autoPowerOnThresholdSoc"] == 40
+    assert NATIVE["loadTouParamsDTO"]["touTimeParamsDTOList"][0]["autoPowerOnThresholdSoc"] == 35
+
+
+def test_unknown_period_and_bad_values_are_refused():
+    for setting, value in [("start_soc", {"period": 2, "value": 30}), ("charging_stop_soc", 101), ("charging_stop_soc", 9.5),
+                           ("max_power_percent", 0), ("time_of_use", "yes"), ("operation_mode", "on"), ("rated_power", 5)]:
+        with pytest.raises(SafetyError):
+            generator_update(NATIVE, setting, value)
+
+
+def test_no_generator_is_a_capability_error():
+    with pytest.raises(CapabilityError):
+        generator_update({}, "operation_mode", "auto")
+
+
+def test_unchanged_value_has_no_changes():
+    assert generator_update(NATIVE, "charging_stop_soc", 95)[1] == []
+
+
+def test_readback_verification():
+    new, changes = generator_update(NATIVE, "start_soc", 40)
+    assert verify_update(new, changes)
+    assert not verify_update(NATIVE, changes)
+    manual, changes = generator_update(NATIVE, "operation_mode", "manual")
+    assert verify_update({**manual, "operationMode": "1"}, changes)

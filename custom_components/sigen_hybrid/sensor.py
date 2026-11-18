@@ -203,6 +203,7 @@ class GeneratorSensor(CoordinatorEntity, SensorEntity):
                 transfer=settings.get("transfer"),
                 min_power_percent=settings.get("min_power_percent"),
                 cooling=settings.get("cooling"),
+                generator_start=settings.get("generator_start"),
             )
         if self.description.key == "power_kw":
             attributes["rows"] = self._generator.get("live", {}).get("rows", [])

@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Pure device-detail views. Navigation, charts and data access belong to the host.
  */
-import { renderChargerButtons } from './sigen-hybrid-overview.js?v=0.2.10.2';
-import { renderDeviceGraphic } from './sigen-hybrid-devices.js?v=0.2.10.2';
+import { renderChargerButtons } from './sigen-hybrid-overview.js?v=0.2.10.3';
+import { renderDeviceGraphic } from './sigen-hybrid-devices.js?v=0.2.10.3';
 export const escapeDetailHTML = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 const esc = escapeDetailHTML;
 const absent = value => value === null || value === undefined || typeof value === 'string' && (!value.trim() || ['unknown', 'unavailable', 'none'].includes(value.toLowerCase()));
@@ -266,6 +266,15 @@ function gateway(ctx) {
     + `<div class="detail-links">${nav('grid', 'Grid')}${nav('load', 'Load')}${deviceSettings(item, 'Gateway settings')}${deviceTools(item)}</div>${ctx.controlPermission===true&&ctx.capabilities?.grid_switch?.available===true?nav('grid_connection','Grid connection'): '<button type="button" class="detail-charging-disabled" disabled aria-disabled="true">Go Off-Grid</button>'}`
     + gatewaySide(ctx,'grid',item,'Grid side info') + gatewaySide(ctx,'generator',item,'Generator side info') + gatewaySide(ctx,'inverter',item,'Inverter side info') + phaseTable(ctx, 'backup', item?.entities || item?.realtime ? item : null, 'Backup side') + phaseTable(ctx, 'load', item?.entities || item?.realtime ? item : null, 'Load side') + parameters(item,[row('Communication status',deviceFact(ctx,item??{},['communication_status','gateway_communication_status'])),row('MAC address',deviceFact(ctx,item??{},['mac_address','mac']))],ctx,['communication_status','gateway_communication_status','mac_address','mac']) };
 }
+function generatorControls(ctx, mode, started) {
+  const control = state(ctx, 'control_status')?.attributes ?? {};
+  if (control.live_writes_locked !== false) return '<p class="detail-note">Read from mySigen. Enable cloud control in Sigenergy TC to change generator settings here.</p>';
+  const manual = String(mode).toLowerCase() === 'manual';
+  const button = (action, label, current, hint) => `<button type="button" class="detail-link" data-generator-action="${action}" ${current ? 'aria-pressed="true" disabled' : ''} title="${esc(hint)}">${esc(label)}</button>`;
+  return `<section class="detail-section"><h3>Generator control</h3><div class="navigation-actions">${button('auto', 'Auto', !manual, 'Generator starts and stops on the configured SOC')}${button('manual', 'Manual', manual, 'Generator only runs when started by hand')}</div>`
+    + (manual ? `<div class="navigation-actions">${button('start', 'Start generator', started === true, 'Start the generator now')}${button('stop', 'Stop generator', started === false, 'Stop the generator')}</div>` : '')
+    + '<p class="detail-note">Changes go to mySigen and are verified by reading back. Return to Auto after a manual test: in Manual the generator does not start on low SOC.</p></section>';
+}
 function generator(ctx) {
   const power = value(ctx, 'generator_power'), mode = firstStateText(ctx, ['generator_mode']);
   const attributes = state(ctx, 'generator_mode')?.attributes ?? {};
@@ -280,7 +289,7 @@ function generator(ctx) {
     + table('Time of use', [row('Schedule', firstStateText(ctx, ['generator_time_of_use'])), ...touRows], true)
     + table('Off-grid switch parameters', [row('Over-voltage transfer point', absent(transfer.over_voltage_v) ? '—' : `${transfer.over_voltage_v} V`), row('Under-voltage transfer point', absent(transfer.under_voltage_v) ? '—' : `${transfer.under_voltage_v} V`), row('Over-frequency transfer point', absent(transfer.over_frequency_hz) ? '—' : `${transfer.over_frequency_hz} Hz`), row('Under-frequency transfer point', absent(transfer.under_frequency_hz) ? '—' : `${transfer.under_frequency_hz} Hz`)])
     + table('Exercise and load condition', [row('Exercise', attributes.exercise?.enabled), row('Load condition', attributes.load_condition?.enabled)])
-    + '<p class="detail-note">Read from mySigen. Change generator settings in the mySigen app.</p>' };
+    + generatorControls(ctx, mode, attributes.generator_start) };
 }
 function grid(ctx) {
   const power = value(ctx, 'grid_power'), direction = power === null ? '—' : Math.abs(power) < .03 ? 'Balanced' : power > 0 ? 'Importing' : 'Exporting';

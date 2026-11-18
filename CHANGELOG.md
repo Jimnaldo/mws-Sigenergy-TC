@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased — generator (read-only)
+## Unreleased — generator
 
 - Show a connected fuel generator as its own device when the owner app advertises one: live power and per-phase rows, operating mode, start/stop SOC, charging stop SOC, maximum power duty, rated power and time-of-use schedule.
 - Add a Generator detail view with the owner app's generator parameters, time-of-use periods, off-grid switch points, exercise and load-condition state. Values are read-only; no generator command is sent.
 - Plants without a generator are re-checked daily instead of every cloud cycle.
+- Add `sigen_hybrid.generator_setting` and Auto/Manual/Start/Stop buttons on the Generator page. Closed allowlist, fresh read before every change, only the requested field changes, readback verification; requires owner-enabled cloud control and an administrator.
 
 See [generator](docs/generator.md).
 

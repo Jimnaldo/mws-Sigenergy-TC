@@ -150,3 +150,37 @@ preview_plan:
           max: 1000
           unit_of_measurement: kWh
           mode: box
+generator_setting:
+  name: Generator setting
+  description: Preview or apply one generator setting from the owner app's generator page. Starts from a fresh read, changes only that field and verifies by reading back. Requires owner-enabled cloud control and an administrator.
+  fields:
+    config_entry:
+      name: Integration
+      required: true
+      selector:
+        config_entry:
+          integration: sigen_hybrid
+    setting:
+      name: Setting
+      required: true
+      selector:
+        select:
+          options:
+            - operation_mode
+            - generator_start
+            - start_soc
+            - stop_soc
+            - charging_stop_soc
+            - max_power_percent
+            - time_of_use
+    value:
+      name: Value
+      description: "auto/manual for operation_mode; true/false for generator_start and time_of_use; a whole percentage for SOC and power duty (or {period, value} for a time-of-use period)."
+      required: true
+      selector:
+        object:
+    dry_run:
+      name: Preview only
+      default: true
+      selector:
+        boolean:
