@@ -115,6 +115,24 @@ async def async_setup(hass, config):
         except SigenError as err:
             raise HomeAssistantError(str(err)) from None
 
+    def _cloud_error_summary(err):
+        """HTTP status plus the API's own code and short message; never the request or headers."""
+        parts = [type(err).__name__]
+        status = getattr(err, "status_code", None)
+        if status is not None:
+            parts.append(f"HTTP {status}")
+        try:
+            payload = json.loads(getattr(err, "response_body", "") or "{}")
+        except ValueError:
+            payload = {}
+        if isinstance(payload, dict):
+            if "code" in payload:
+                parts.append(f"code {payload['code']}")
+            message = payload.get("msg") or payload.get("message")
+            if isinstance(message, str) and message:
+                parts.append(message[:120])
+        return ", ".join(parts)
+
     async def generator_setting(call):
         """Preview or apply one closed generator setting from the owner app's generator page."""
         from .core.generator import SETTINGS_PATH, WRITE_PATH, generator_settings_data, generator_update, verify_update
@@ -145,7 +163,10 @@ async def async_setup(hass, config):
                 if dry_run or not changes:
                     result["status"] = "preview" if changes else "unchanged"
                     return result
-                await provider._request("POST", WRITE_PATH, json=new)
+                try:
+                    await provider.client._envelope("POST", WRITE_PATH, json=new)
+                except Exception as err:  # noqa: BLE001 - report only status and API code/message
+                    raise HomeAssistantError(f"Generator write rejected: {_cloud_error_summary(err)}") from None
                 readback = await provider._request("GET", SETTINGS_PATH, params=params)
                 result["status"] = "applied" if verify_update(readback, changes) else "unverified"
                 settings = generator_settings_data(readback)
