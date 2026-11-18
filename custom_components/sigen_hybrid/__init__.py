@@ -126,7 +126,9 @@ async def async_setup(hass, config):
             if user is None or not user.is_admin:
                 raise HomeAssistantError("Only an administrator may change generator settings")
         controls = runtime.controls
-        if controls is None or not controls.enabled:
+        # With Modbus control as well, the cloud actor sits behind a hybrid wrapper.
+        controls = getattr(controls, "cloud", controls)
+        if controls is None or not getattr(controls, "enabled", False) or not hasattr(controls, "operation_lock"):
             raise HomeAssistantError("Enable cloud control in Sigenergy TC to change generator settings")
         try:
             async with controls.operation_lock:
