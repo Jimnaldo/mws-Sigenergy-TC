@@ -187,6 +187,8 @@ async def async_setup(hass, config):
                 }
                 if dry_run or not changes:
                     result["status"] = "preview" if changes else "unchanged"
+                    if changes:
+                        result["payload"] = owner_payload(new)
                     return result
                 try:
                     await _owner_post(provider.client, WRITE_PATH, owner_payload(new))
