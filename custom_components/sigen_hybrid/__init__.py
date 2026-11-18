@@ -196,7 +196,18 @@ async def async_setup(hass, config):
                     runtime.cloud_data["generator"] = generator
                     runtime.async_update_listeners()
                 if result["status"] != "applied":
-                    raise HomeAssistantError("The generator did not confirm the new setting; check mySigen")
+                    tou = (readback or {}).get("loadTouParamsDTO") if isinstance(readback, dict) else None
+                    first = ((tou or {}).get("touTimeParamsDTOList") or [None])[0] if isinstance(tou, dict) else None
+                    seen = {
+                        "type": type(readback).__name__,
+                        "operationMode": (readback or {}).get("operationMode") if isinstance(readback, dict) else None,
+                        "period0": {k: first.get(k) for k in ("autoPowerOnThresholdSoc", "autoPowerOffThresholdSoc")}
+                        if isinstance(first, dict) else repr(first)[:60],
+                        "changes": [list(c) for c in changes],
+                    }
+                    raise HomeAssistantError(
+                        f"The generator did not confirm the new setting; check mySigen (read back {json.dumps(seen, default=str)})"
+                    )
                 return result
         except SigenError as err:
             raise HomeAssistantError(str(err)) from None
