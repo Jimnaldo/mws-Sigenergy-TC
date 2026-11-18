@@ -115,21 +115,6 @@ async def async_setup(hass, config):
         except SigenError as err:
             raise HomeAssistantError(str(err)) from None
 
-    async def _owner_post(client, path, payload):
-        """POST like the owner app: its non-secret context headers select the plant's region."""
-        transport = client._transport
-        session = await client._http_session()
-        await transport._auth.ensure_token(session, transport._base_url)
-        headers = {
-            **transport._auth.headers,
-            "lang": "en_US",
-            "client-server": getattr(client, "region", "eu"),
-            "VERSION": "RELEASE",
-        }
-        url = f"{transport._base_url}{path.lstrip('/')}"
-        async with session.request("POST", url, headers=headers, json=payload) as response:
-            return await transport._parse_response(response)
-
     def _cloud_error_summary(err):
         """HTTP status plus the API's own code and short message; never the request or headers."""
         parts = [type(err).__name__]
@@ -191,7 +176,7 @@ async def async_setup(hass, config):
                         result["payload"] = owner_payload(new)
                     return result
                 try:
-                    await _owner_post(provider.client, WRITE_PATH, owner_payload(new))
+                    await provider.client._envelope("POST", WRITE_PATH, json=owner_payload(new))
                 except Exception as err:  # noqa: BLE001 - report only status and API code/message
                     raise HomeAssistantError(f"Generator write rejected: {_cloud_error_summary(err)}") from None
                 readback = await provider._request("GET", SETTINGS_PATH, params=params)
