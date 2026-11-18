@@ -128,9 +128,12 @@ async def async_setup(hass, config):
         if isinstance(payload, dict):
             if "code" in payload:
                 parts.append(f"code {payload['code']}")
-            message = payload.get("msg") or payload.get("message")
-            if isinstance(message, str) and message:
-                parts.append(message[:120])
+            for key in ("msg", "message", "error"):
+                message = payload.get(key)
+                if isinstance(message, str) and message:
+                    parts.append(message[:160])
+        elif getattr(err, "response_body", None):
+            parts.append(str(err.response_body)[:160])
         return ", ".join(parts)
 
     async def generator_setting(call):
