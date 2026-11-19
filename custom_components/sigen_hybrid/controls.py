@@ -278,14 +278,26 @@ class OwnerControls:
         self._notify()
         return dict(self.operation)
 
-    async def setting(self, key, value, *, request_id, source, dry_run=True, serial=None, expected_revision=None):
-        """Preview or queue one closed owner setting; no arbitrary payload dispatch."""
+    async def setting(self, key, value, *, request_id, source, dry_run=True, serial=None, expected_revision=None,
+                      pause_automation=None):
+        """Preview or queue one closed owner setting; no arbitrary payload dispatch.
+
+        A manual setting pauses automation by default so an owner's choice is not
+        overwritten. ``pause_automation=False`` lets an administrator opt out, e.g.
+        when restoring the mode that their own Home Assistant automations manage.
+        Automation-sourced settings never pause automation.
+        """
         from .core.recovery import canonical
 
         if not self.enabled or self._closing:
             raise CapabilityError("Plant control is not enabled")
+        if pause_automation is not None and type(pause_automation) is not bool:
+            raise SafetyError("pause_automation must be a boolean")
+        pauses = source.value == "manual" and key not in ("ac_charging", "dc_charging")
+        if pause_automation is False:
+            pauses = False
         request = {"key": key, "value": copy.deepcopy(value), "request_id": request_id, "source": source.value, "serial": serial,
-                   "pause_automation": source.value == "manual" and key not in ("ac_charging", "dc_charging")}
+                   "pause_automation": pauses}
         if expected_revision is not None:
             if not isinstance(expected_revision, str) or len(expected_revision) != 64:
                 raise SafetyError("Reload the native setting before saving")

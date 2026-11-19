@@ -111,9 +111,27 @@ async def async_setup(hass, config):
                 source=Source.MANUAL if call.context.user_id is not None else Source.AUTOMATION,
                 dry_run=call.data["dry_run"], serial=call.data.get("serial"),
                 **({"expected_revision": call.data["expected_revision"]} if "expected_revision" in call.data else {}),
+                **({"pause_automation": call.data["pause_automation"]} if "pause_automation" in call.data else {}),
             )
         except SigenError as err:
             raise HomeAssistantError(str(err)) from None
+
+    async def resume_automation(call):
+        """Clear the pause an owner change placed on automation-sourced commands."""
+        runtime = await coordinator(call, refresh=False)
+        if call.context.user_id is not None:
+            user = await hass.auth.async_get_user(call.context.user_id)
+            if user is None or not user.is_admin:
+                raise HomeAssistantError("Only an administrator may resume automation")
+        try:
+            if runtime.controls is None:
+                raise HomeAssistantError("No owner control runtime is available")
+            await runtime.controls.resume_automation()
+            record = await runtime.controls.automation_record()
+        except SigenError as err:
+            raise HomeAssistantError(str(err)) from None
+        runtime.async_update_listeners()
+        return {"paused": record.get("automation_pause", {}).get("paused") is True}
 
     async def preview_plan(call):
         runtime = await coordinator(call)
@@ -171,7 +189,15 @@ async def async_setup(hass, config):
             vol.Optional("dry_run", default=True): bool,
             vol.Optional("serial"): vol.All(str, vol.Length(min=1, max=80)),
             vol.Optional("expected_revision"): vol.All(str, vol.Match(r"^[0-9a-f]{64}$")),
+            vol.Optional("pause_automation"): bool,
         }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "resume_automation",
+        resume_automation,
+        schema=vol.Schema({vol.Required("config_entry"): str}),
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(

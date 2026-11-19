@@ -124,6 +124,21 @@ owner_setting:
       description: Optional revision from the TC settings popup; rejects a stale edit if the native value has changed.
       selector:
         text:
+    pause_automation:
+      name: Pause automation afterwards
+      description: Only for settings made by an administrator. By default a manual setting pauses automation-sourced commands until resumed; set to false when restoring a mode that your own automations manage. Automation-sourced settings never pause.
+      selector:
+        boolean:
+resume_automation:
+  name: Resume automation
+  description: Clear the pause that an owner change placed on automation-sourced commands, so Home Assistant automations and TC scheduling may change plant settings again.
+  fields:
+    config_entry:
+      name: Integration
+      required: true
+      selector:
+        config_entry:
+          integration: sigen_hybrid
 preview_plan:
   name: Preview charging plan
   description: Return an advisory low-cost plan using the selected installed forecast provider. Never dispatches commands or enables export.
