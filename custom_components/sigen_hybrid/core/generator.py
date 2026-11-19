@@ -368,7 +368,9 @@ def generator_update(raw, setting, value):
         mode = str(new.get("operationMode"))
         if value and mode != str(MODE_CODES["manual"]):
             raise SafetyError("Switch the generator to manual before starting it")
-        put(new, "manualSwitch", "manualSwitch", value if type(raw.get("manualSwitch")) is not int else int(value))
+        # The owner app's model is integer flags (enableGenerator 1, coolingEnable 0);
+        # an unset switch reads back as null, so write 1/0 unless the cloud used booleans.
+        put(new, "manualSwitch", "manualSwitch", value if type(raw.get("manualSwitch")) is bool else int(value))
     elif setting == "charging_stop_soc":
         put(new, "cutOffSoc", "cutOffSoc", _soc(value))
     elif setting == "max_power_percent":
