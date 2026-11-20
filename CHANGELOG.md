@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add the `sigen_hybrid.resume_automation` service to clear the pause that a manual owner change places on automation-sourced commands. Administrators only, or Home Assistant automations.
+- Add an optional `pause_automation` field to `owner_setting`. An administrator can set it to `false` when restoring a setting that their own automations manage, such as returning to Sigen AI Mode after a Remote EMS session. The default behaviour is unchanged.
+
 ## 0.2.10 — Public Beta
 
 - Use fresh charger status to disable Start while charging and Stop while idle. Keep Stop available for a waiting session accepted by TC.
